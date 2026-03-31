@@ -36,7 +36,7 @@ c-test/
 │  ├─ CMakeLists.txt         # 测试构建与 add_test 注册
 │  └─ test_add.c             # add 模块单元测试
 └─ 3rdparty/
-	└─ unity/                 # Unity 测试框架源码
+ └─ unity/                 # Unity 测试框架源码
 ```
 
 ## 3. 构建与运行
@@ -104,23 +104,23 @@ ctest -C Debug --output-on-failure
 
 1. 在 src 下新增源码与头文件
 
-	- src/math_utils.c
-	- src/math_utils.h
+- src/math_utils.c
+- src/math_utils.h
 
-2. 在 src/CMakeLists.txt 中新增库或并入现有库
+1. 在 src/CMakeLists.txt 中新增库或并入现有库
 
-	- 可选方案 A：新增独立 add_library(math_utils ...)
-	- 可选方案 B：并入已有库（按项目规划决定）
+- 可选方案 A：新增独立 add_library(math_utils ...)
+- 可选方案 B：并入已有库（按项目规划决定）
 
-3. 在需要使用该模块的目标中链接该库
+1. 在需要使用该模块的目标中链接该库
 
-	- 如主程序 target_link_libraries(... math_utils)
-	- 如测试程序 target_link_libraries(... math_utils unity)
+- 如主程序 target_link_libraries(... math_utils)
+- 如测试程序 target_link_libraries(... math_utils unity)
 
-4. 为该模块添加测试并注册到 CTest
+1. 为该模块添加测试并注册到 CTest
 
-	- 新建 tests/test_math_utils.c
-	- 在 tests/CMakeLists.txt 中新增 add_executable + target_link_libraries + add_test
+- 新建 tests/test_math_utils.c
+- 在 tests/CMakeLists.txt 中新增 add_executable + target_link_libraries + add_test
 
 ## 7. 如何新增一个测试文件（推荐流程）
 
@@ -128,18 +128,18 @@ ctest -C Debug --output-on-failure
 2. 编写 Unity 测试用例（RUN_TEST）
 3. 在 tests/CMakeLists.txt 中添加：
 
-	- add_executable(test_xxx test_xxx.c)
-	- target_link_libraries(test_xxx PRIVATE 你的模块库 unity)
-	- add_test(test_xxx test_xxx)
+- add_executable(test_xxx test_xxx.c)
+- target_link_libraries(test_xxx PRIVATE 你的模块库 unity)
+- add_test(test_xxx test_xxx)
 
-4. 重新配置并编译：
+1. 重新配置并编译：
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
-5. 执行测试：
+1. 执行测试：
 
 ```bash
 cd build
@@ -159,7 +159,3 @@ ctest --output-on-failure
 - 增加静态检查（clang-tidy / cppcheck）
 - 增加格式化工具（clang-format）
 - 引入更细粒度的模块目录结构（每模块独立子目录与 CMakeLists.txt）
-
----
-
-如果你准备把这个模板用于真实业务项目，建议下一步先把 src/main.c 中的示例交互逻辑替换为你的应用入口，并按模块逐步补齐测试。
