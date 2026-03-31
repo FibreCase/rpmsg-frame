@@ -12,4 +12,4 @@ target_link_libraries(test_add
         unity
 )
 
-add_test(ctest_add test_add)
+add_test(test_add test_add)
