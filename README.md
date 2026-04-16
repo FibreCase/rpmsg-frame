@@ -159,3 +159,47 @@ ctest --output-on-failure
 - 增加静态检查（clang-tidy / cppcheck）
 - 增加格式化工具（clang-format）
 - 引入更细粒度的模块目录结构（每模块独立子目录与 CMakeLists.txt）
+
+## 10. 面向 RK3506（ARM）交叉编译
+
+仓库已提供交叉编译工具链文件：
+
+- `cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake`
+
+### 10.1 前置要求
+
+- 已安装 RK3506 对应的交叉编译工具链（默认前缀：`arm-linux-gnueabihf-`）
+- 建议准备目标根文件系统 sysroot（SDK 通常会提供）
+
+### 10.2 配置与编译
+
+在项目根目录执行：
+
+```bash
+cmake -S . -B build-rk3506 \
+	-DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake \
+	-DCMAKE_SYSROOT=/path/to/rk3506/sysroot \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DBUILD_TESTING=OFF
+
+cmake --build build-rk3506 -j
+```
+
+说明：
+
+- `BUILD_TESTING=OFF` 用于避免在宿主机执行目标板程序测试
+- 如果你的工具链前缀不同，可编辑 toolchain 文件中的 `TOOLCHAIN_PREFIX`
+- 如需 CPU 指令调优，可传入 `-DRK3506_CPU_FLAGS=\"-mcpu=...\"`
+
+### 10.3 产物部署到板端
+
+可执行文件默认在：
+
+- `build-rk3506/c-linux-rpmsg`
+
+将该文件拷贝到 RK3506 设备并赋予执行权限后运行：
+
+```bash
+scp build-rk3506/c-linux-rpmsg root@<board-ip>:/tmp/
+ssh root@<board-ip> "chmod +x /tmp/c-linux-rpmsg && /tmp/c-linux-rpmsg"
+```
