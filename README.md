@@ -1,100 +1,105 @@
-# frf: 串口帧收发与 PTY/RPMSG 桥接示例（CMake + CTest + Unity）
+# FibreCase RPMSG Frame (frf) C Library
 
-该仓库是一个面向 Linux 的 C 项目，包含两条能力线：
+This repository is a Linux C project centered on RPMSG-style frame transport.
 
-- rframe/tty_driver：对串口设备进行帧发送和异步接收
-- pts：创建虚拟串口（PTY），可用于 loopback 或桥接到外部设备（如 RPMSG TTY）
+The core runtime path is:
 
-当前 `frf` 可作为 Unix socket 守护进程运行，把其他进程发来的请求转换为 RPMSG 帧发送。
+- `tty_driver`: serial open/config/send/receive foundation
+- `rframe`: frame packing and payload transmission
+- `frf`: Unix socket daemon that accepts requests and sends RPMSG frames
 
-项目同时集成了 CTest 与 Unity，便于持续回归验证。
+The `pts` part is kept as a supplementary test and integration utility. It provides a virtual serial endpoint for loopback and bridge scenarios, but it is not the primary product flow.
 
-## 1. 当前构建产物
+The project integrates CTest and Unity for regression testing.
 
-根 CMake 会生成以下可执行文件：
+## 1. Build Outputs
 
-- frf：主程序，使用 rframe 发送示例 payload 到指定串口
-- frf_pts：PTY 工具，可在 loopback 或 bridge 模式运行
+Root CMake generates these executables:
 
-另外，src 中还会构建以下库目标：
+- `frf`: main runtime daemon for RPMSG frame sending
+- `frf_pts`: PTY helper tool used mainly for test and integration setup
 
-- rframe：基于 tty_driver 的帧封装
-- pts_runtime：pts 逻辑库（编译时定义 PTS_NO_MAIN）
+Library targets under `src`:
 
-## 2. 目录结构
+- `rframe`: frame layer built on top of `tty_driver`
+- `pts_runtime`: reusable PTY runtime library (compiled with `PTS_NO_MAIN`)
+
+## 2. Project Layout
 
 ```text
 c-arm/
-├─ CMakeLists.txt
-├─ src/
-│  ├─ CMakeLists.txt
-│  ├─ main.c
-│  ├─ tty_driver.h
-│  ├─ tty_driver.c
-│  ├─ rframe.h
-│  ├─ rframe.c
-│  ├─ pts.h
-│  └─ pts.c
-├─ tests/
-│  ├─ CMakeLists.txt
-│  ├─ test_rframe.c
-│  └─ test_pts.c
-├─ 3rdparty/
-│  └─ unity/
-└─ cmake/
-   └─ toolchains/
-      └─ rk3506-arm-linux-gnueabihf.cmake
+|- CMakeLists.txt
+|- src/
+|  |- CMakeLists.txt
+|  |- main.c
+|  |- tty_driver.h
+|  |- tty_driver.c
+|  |- rframe.h
+|  |- rframe.c
+|  |- pts.h
+|  \- pts.c
+|- tests/
+|  |- CMakeLists.txt
+|  |- test_rframe.c
+|  \- test_pts.c
+|- 3rdparty/
+|  \- unity/
+\- cmake/
+   \- toolchains/
+      \- rk3506-arm-linux-gnueabihf.cmake
 ```
 
-## 3. 本机构建与运行
+## 3. Build and Run (Host)
 
-### 3.1 配置与编译
+### 3.1 Configure and Build
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-### 3.2 运行 frf_pts（推荐先做）
+### 3.2 Start frf (Primary Runtime)
 
-1) loopback 模式（不接外部桥接设备）：
-
-```bash
-./build/frf_pts
-```
-
-程序会打印一个虚拟串口路径（如 /dev/pts/7）。
-
-2) bridge 模式（桥接到实际设备，例如 RPMSG TTY）：
-
-```bash
-./build/frf_pts /dev/ttyRPMSG0
-```
-
-### 3.3 运行 frf
-
-`frf` 现在会启动一个 Unix socket 守护进程，默认监听 `/tmp/frf.sock`，并把收到的请求发送到指定串口设备。
+`frf` starts a Unix socket daemon (default: `/tmp/frf.sock`) and forwards incoming requests to the specified serial device as RPMSG frames.
 
 ```bash
 ./build/frf /dev/pts/7 /tmp/frf.sock
 ```
 
-如果省略参数，则默认使用 `/dev/pts/7` 和 `/tmp/frf.sock`。
+If arguments are omitted, defaults are `/dev/pts/7` and `/tmp/frf.sock`.
 
-#### 请求格式
+### 3.3 Optional: Start frf_pts for Test Wiring
 
-客户端使用 `SOCK_SEQPACKET` 连接 socket，每个请求发送一帧：
+Use this when you need a virtual endpoint for local validation.
 
-- `cmd`：2 字节，网络字节序
-- `data_length`：1 字节
-- `data`：`data_length` 字节
+1. Loopback mode:
 
-服务端返回 5 字节响应：
+```bash
+./build/frf_pts
+```
 
-- `status`：1 字节，`0` 表示发送成功
-- `errno`：4 字节，网络字节序，`status != 0` 时表示失败原因
+It prints a PTY path such as `/dev/pts/7`.
 
-示例请求：
+2. Bridge mode (for example to RPMSG TTY):
+
+```bash
+./build/frf_pts /dev/ttyRPMSG0
+```
+
+## 4. Socket Request Protocol
+
+Clients connect with `SOCK_SEQPACKET` and send one frame per request:
+
+- `cmd`: 2 bytes, network byte order
+- `data_length`: 1 byte
+- `data`: `data_length` bytes
+
+Server reply is 5 bytes:
+
+- `status`: 1 byte, `0` means success
+- `errno`: 4 bytes, network byte order, valid when `status != 0`
+
+Example request:
 
 ```text
 cmd = 0x0102
@@ -102,14 +107,14 @@ data_length = 4
 data = DE AD BE EF
 ```
 
-## 4. 测试（CTest + Unity）
+## 5. Testing (CTest + Unity)
 
-默认开启 BUILD_TESTING 时会构建并注册以下测试：
+With `BUILD_TESTING=ON` (default), these tests are registered:
 
-- test_rframe
-- test_pts
+- `test_rframe`: validates generated frame bytes from `rframe_send_payload`
+- `test_pts`: validates PTY session behavior (supplementary path)
 
-执行方式：
+Run tests:
 
 ```bash
 cmake -S . -B build
@@ -118,42 +123,38 @@ cd build
 ctest --output-on-failure
 ```
 
-测试要点：
-
-- test_pts：验证 PTY 会话可收集从 slave 侧写入的数据
-- test_rframe：验证 rframe_send_payload 的字节流与期望帧格式一致
-
-## 5. 模块说明
+## 6. Module Summary
 
 ### tty_driver
 
-- 负责设备打开/关闭、raw 模式设置、发送锁、后台接收线程
-- 接收回调支持两种触发原因：
-  - 空闲超时（TTY_RX_REASON_IDLE）
-  - 缓冲区满（TTY_RX_REASON_BUFFER_FULL）
+- Opens/closes serial devices and configures raw mode
+- Provides TX locking and asynchronous RX thread
+- RX callback reasons:
+  - idle timeout (`TTY_RX_REASON_IDLE`)
+  - buffer full (`TTY_RX_REASON_BUFFER_FULL`)
 
 ### rframe
 
-- 提供 rframe_init / rframe_send_payload / rframe_close
-- 发送前会填充固定帧头 0xAA55
-- payload 格式：header(2B) + cmd(2B) + data_length(1B) + data(NB)
+- APIs: `rframe_init`, `rframe_send_payload`, `rframe_close`
+- Uses fixed header `0xAA55`
+- Payload format: `header(2B) + cmd(2B) + data_length(1B) + data(NB)`
 
-### pts
+### pts (supplementary)
 
-- 提供可复用库接口：pts_init / pts_take_rx_data / pts_release
-- 支持创建 PTY 对并启动后台收发
-- 可选桥接到外部串口设备，便于联调
+- APIs: `pts_init`, `pts_take_rx_data`, `pts_release`
+- Creates PTY pairs and background forwarding
+- Useful for test loopback and integration bridge scenarios
 
-## 6. RK3506 交叉编译
+## 7. RK3506 Cross Compilation
 
-工具链文件：cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake
+Toolchain file: `cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake`
 
-### 6.1 前置要求
+### 7.1 Prerequisites
 
-- 已安装对应交叉工具链（默认前缀 arm-linux-gnueabihf-）
-- 建议提供 sysroot（按你的 SDK 路径）
+- Cross toolchain installed (default prefix: `arm-linux-gnueabihf-`)
+- Sysroot recommended (from your SDK)
 
-### 6.2 配置与编译
+### 7.2 Configure and Build
 
 ```bash
 cmake -S . -B build-rk3506 \
@@ -165,31 +166,31 @@ cmake -S . -B build-rk3506 \
 cmake --build build-rk3506 -j
 ```
 
-生成产物通常为：
+Expected artifacts:
 
-- build-rk3506/frf
-- build-rk3506/frf_pts
+- `build-rk3506/frf`
+- `build-rk3506/frf_pts`
 
-### 6.3 部署到板端
+### 7.3 Deploy to Board
 
 ```bash
 scp build-rk3506/frf build-rk3506/frf_pts root@<board-ip>:/tmp/
 ssh root@<board-ip> "chmod +x /tmp/frf /tmp/frf_pts"
 ```
 
-## 7. 常见问题
+## 8. Troubleshooting
 
-1) frf 启动失败，提示打开设备失败：
+1. `frf` fails to start because device open fails:
 
-- 检查 main.c 中设备路径是否存在（默认 /dev/pts/7）
-- 先运行 frf_pts，确认打印出来的 PTY 路径
+- Verify the device path exists (default `/dev/pts/7`)
+- Start `frf_pts` first and use the printed PTY path
 
-2) ctest 无测试项：
+2. No tests in `ctest`:
 
-- 确认配置时未关闭 BUILD_TESTING
-- 重新执行 cmake 配置后再编译
+- Ensure `BUILD_TESTING` is not disabled
+- Re-run CMake configure and build
 
-3) 交叉编译找不到库/头文件：
+3. Missing headers/libraries in cross build:
 
-- 检查 CMAKE_SYSROOT 是否正确
-- 检查交叉工具链前缀是否与本机安装一致
+- Check `CMAKE_SYSROOT`
+- Check cross compiler prefix matches your installed toolchain
