@@ -1,205 +1,172 @@
-# C 语言通用项目模板（CMake + CTest）
+# frf: 串口帧收发与 PTY/RPMSG 桥接示例（CMake + CTest + Unity）
 
-这个项目是一个面向 C 语言开发的通用模板，目标是帮助你快速搭建可维护、可扩展、可测试的工程。
+该仓库是一个面向 Linux 的 C 项目，包含两条能力线：
 
-它已经实现了：
+- rframe/tty_driver：对串口设备进行帧发送和异步接收
+- pts：创建虚拟串口（PTY），可用于 loopback 或桥接到外部设备（如 RPMSG TTY）
 
-- 基于 CMake 的模块化组织
-- 基于 CTest 的自动化测试入口
-- 基于 Unity 的单元测试框架集成
+项目同时集成了 CTest 与 Unity，便于持续回归验证。
 
-适用于以下场景：
+## 1. 当前构建产物
 
-- 快速启动一个新的 C 项目
-- 将代码按模块拆分成独立库
-- 在本地或 CI 中统一执行测试
+根 CMake 会生成以下可执行文件：
 
-## 1. 项目特性
+- frf：主程序，使用 rframe 发送示例 payload 到指定串口
+- frf_pts：PTY 工具，可在 loopback 或 bridge 模式运行
 
-- 模块化构建：每个功能模块都可以独立维护自己的 CMakeLists.txt
-- 主程序与模块解耦：主程序通过链接库使用模块能力
-- 测试独立目录：测试代码集中在 tests 目录
-- 统一测试入口：使用 ctest 统一执行所有测试
-- 第三方测试框架内置：已集成 Unity（位于 3rdparty/unity）
+另外，src 中还会构建以下库目标：
+
+- rframe：基于 tty_driver 的帧封装
+- pts_runtime：pts 逻辑库（编译时定义 PTS_NO_MAIN）
 
 ## 2. 目录结构
 
 ```text
-c-test/
-├─ CMakeLists.txt            # 根构建入口，汇总 src/、tests/、3rdparty/
+c-arm/
+├─ CMakeLists.txt
 ├─ src/
-│  ├─ CMakeLists.txt         # 模块构建配置（示例模块 add）
-│  ├─ add.h
-│  ├─ add.c
-│  └─ main.c                 # 示例主程序
+│  ├─ CMakeLists.txt
+│  ├─ main.c
+│  ├─ tty_driver.h
+│  ├─ tty_driver.c
+│  ├─ rframe.h
+│  ├─ rframe.c
+│  ├─ pts.h
+│  └─ pts.c
 ├─ tests/
-│  ├─ CMakeLists.txt         # 测试构建与 add_test 注册
-│  └─ test_add.c             # add 模块单元测试
-└─ 3rdparty/
- └─ unity/                 # Unity 测试框架源码
+│  ├─ CMakeLists.txt
+│  ├─ test_rframe.c
+│  └─ test_pts.c
+├─ 3rdparty/
+│  └─ unity/
+└─ cmake/
+   └─ toolchains/
+      └─ rk3506-arm-linux-gnueabihf.cmake
 ```
 
-## 3. 构建与运行
+## 3. 本机构建与运行
 
-### 3.1 配置工程
+### 3.1 配置与编译
 
-在项目根目录执行：
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+### 3.2 运行 frf_pts（推荐先做）
+
+1) loopback 模式（不接外部桥接设备）：
+
+```bash
+./build/frf_pts
+```
+
+程序会打印一个虚拟串口路径（如 /dev/pts/7）。
+
+2) bridge 模式（桥接到实际设备，例如 RPMSG TTY）：
+
+```bash
+./build/frf_pts /dev/ttyRPMSG0
+```
+
+### 3.3 运行 frf
+
+当前 main.c 内默认写死设备路径为 /dev/pts/7，因此通常需要先启动 frf_pts 并确认路径一致。
+
+```bash
+./build/frf
+```
+
+运行后会发送一帧示例数据并等待按键退出。
+
+## 4. 测试（CTest + Unity）
+
+默认开启 BUILD_TESTING 时会构建并注册以下测试：
+
+- test_rframe
+- test_pts
+
+执行方式：
 
 ```bash
 cmake -S . -B build
-```
-
-### 3.2 编译
-
-```bash
-cmake --build build
-```
-
-### 3.3 运行主程序
-
-```bash
-./build/c_test_demo
-```
-
-Windows 上通常为：
-
-```powershell
-.\build\Debug\c_test_demo.exe
-```
-
-说明：可执行文件路径会因生成器（Ninja、Visual Studio、MinGW）和配置（Debug/Release）不同而变化。
-
-## 4. 执行测试（CTest）
-
-### 4.1 在 build 目录运行
-
-```bash
-cd build
-ctest
-```
-
-### 4.2 查看详细日志
-
-```bash
-ctest --output-on-failure
-```
-
-### 4.3 指定构建配置（多配置生成器，如 Visual Studio）
-
-```bash
-ctest -C Debug --output-on-failure
-```
-
-## 5. 当前示例说明
-
-- src/add.c 提供示例函数 add(int x, int y)
-- tests/test_add.c 使用 Unity 对 add 函数做断言测试
-- tests/CMakeLists.txt 中通过 add_test(test_add test_add) 注册到 CTest
-
-这意味着，只要你继续按同样方式添加测试，就能通过 ctest 一键统一执行。
-
-## 6. 如何新增一个业务模块
-
-以新增模块 math_utils 为例：
-
-1. 在 src 下新增源码与头文件
-
-- src/math_utils.c
-- src/math_utils.h
-
-1. 在 src/CMakeLists.txt 中新增库或并入现有库
-
-- 可选方案 A：新增独立 add_library(math_utils ...)
-- 可选方案 B：并入已有库（按项目规划决定）
-
-1. 在需要使用该模块的目标中链接该库
-
-- 如主程序 target_link_libraries(... math_utils)
-- 如测试程序 target_link_libraries(... math_utils unity)
-
-1. 为该模块添加测试并注册到 CTest
-
-- 新建 tests/test_math_utils.c
-- 在 tests/CMakeLists.txt 中新增 add_executable + target_link_libraries + add_test
-
-## 7. 如何新增一个测试文件（推荐流程）
-
-1. 新建测试源码，如 tests/test_xxx.c
-2. 编写 Unity 测试用例（RUN_TEST）
-3. 在 tests/CMakeLists.txt 中添加：
-
-- add_executable(test_xxx test_xxx.c)
-- target_link_libraries(test_xxx PRIVATE 你的模块库 unity)
-- add_test(test_xxx test_xxx)
-
-1. 重新配置并编译：
-
-```bash
-cmake -S . -B build
-cmake --build build
-```
-
-1. 执行测试：
-
-```bash
+cmake --build build -j
 cd build
 ctest --output-on-failure
 ```
 
-## 8. 推荐开发实践
+测试要点：
 
-- 头文件与实现文件分离，明确模块边界
-- 库目标设置 PUBLIC/PRIVATE include/link 作用域
-- 每个模块至少配套一个测试文件
-- 在 CI 中执行 cmake + build + ctest，保证变更质量
+- test_pts：验证 PTY 会话可收集从 slave 侧写入的数据
+- test_rframe：验证 rframe_send_payload 的字节流与期望帧格式一致
 
-## 9. 后续可扩展方向
+## 5. 模块说明
 
-- 增加代码覆盖率（gcov/lcov）
-- 增加静态检查（clang-tidy / cppcheck）
-- 增加格式化工具（clang-format）
-- 引入更细粒度的模块目录结构（每模块独立子目录与 CMakeLists.txt）
+### tty_driver
 
-## 10. 面向 RK3506（ARM）交叉编译
+- 负责设备打开/关闭、raw 模式设置、发送锁、后台接收线程
+- 接收回调支持两种触发原因：
+  - 空闲超时（TTY_RX_REASON_IDLE）
+  - 缓冲区满（TTY_RX_REASON_BUFFER_FULL）
 
-仓库已提供交叉编译工具链文件：
+### rframe
 
-- `cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake`
+- 提供 rframe_init / rframe_send_payload / rframe_close
+- 发送前会填充固定帧头 0xAA55
+- payload 格式：header(2B) + cmd(2B) + data_length(1B) + data(NB)
 
-### 10.1 前置要求
+### pts
 
-- 已安装 RK3506 对应的交叉编译工具链（默认前缀：`arm-linux-gnueabihf-`）
-- 建议准备目标根文件系统 sysroot（SDK 通常会提供）
+- 提供可复用库接口：pts_init / pts_take_rx_data / pts_release
+- 支持创建 PTY 对并启动后台收发
+- 可选桥接到外部串口设备，便于联调
 
-### 10.2 配置与编译
+## 6. RK3506 交叉编译
 
-在项目根目录执行：
+工具链文件：cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake
+
+### 6.1 前置要求
+
+- 已安装对应交叉工具链（默认前缀 arm-linux-gnueabihf-）
+- 建议提供 sysroot（按你的 SDK 路径）
+
+### 6.2 配置与编译
 
 ```bash
 cmake -S . -B build-rk3506 \
-	-DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake \
-	-DCMAKE_SYSROOT=/path/to/rk3506/sysroot \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DBUILD_TESTING=OFF
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake \
+  -DCMAKE_SYSROOT=/path/to/rk3506/sysroot \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTING=OFF
 
 cmake --build build-rk3506 -j
 ```
 
-说明：
+生成产物通常为：
 
-- `BUILD_TESTING=OFF` 用于避免在宿主机执行目标板程序测试
-- 如果你的工具链前缀不同，可编辑 toolchain 文件中的 `TOOLCHAIN_PREFIX`
-- 如需 CPU 指令调优，可传入 `-DRK3506_CPU_FLAGS=\"-mcpu=...\"`
+- build-rk3506/frf
+- build-rk3506/frf_pts
 
-### 10.3 产物部署到板端
-
-可执行文件默认在：
-
-- `build-rk3506/c-linux-rpmsg`
-
-将该文件拷贝到 RK3506 设备并赋予执行权限后运行：
+### 6.3 部署到板端
 
 ```bash
-scp build-rk3506/c-linux-rpmsg root@<board-ip>:/tmp/
-ssh root@<board-ip> "chmod +x /tmp/c-linux-rpmsg && /tmp/c-linux-rpmsg"
+scp build-rk3506/frf build-rk3506/frf_pts root@<board-ip>:/tmp/
+ssh root@<board-ip> "chmod +x /tmp/frf /tmp/frf_pts"
 ```
+
+## 7. 常见问题
+
+1) frf 启动失败，提示打开设备失败：
+
+- 检查 main.c 中设备路径是否存在（默认 /dev/pts/7）
+- 先运行 frf_pts，确认打印出来的 PTY 路径
+
+2) ctest 无测试项：
+
+- 确认配置时未关闭 BUILD_TESTING
+- 重新执行 cmake 配置后再编译
+
+3) 交叉编译找不到库/头文件：
+
+- 检查 CMAKE_SYSROOT 是否正确
+- 检查交叉工具链前缀是否与本机安装一致
