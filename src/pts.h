@@ -20,6 +20,12 @@ int pts_init(pts_session_t **session, const char **device_path, const char *brid
  */
 int pts_take_rx_data(pts_session_t *session, uint8_t **data, size_t *len);
 
+/* Send TX data to the PTY master side.
+ * Sends an arbitrary length uint8_t array to the PTY.
+ * Returns 0 on success, -1 on error with errno set.
+ */
+int pts_send_tx_data(pts_session_t *session, const uint8_t *data, size_t len);
+
 /* Stop the PTY, stop background collection, and free all session resources. */
 void pts_release(pts_session_t *session);
 

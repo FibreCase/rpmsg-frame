@@ -1,0 +1,6 @@
+#ifndef __COMMAND_CONFIG_H
+#define __COMMAND_CONFIG_H
+
+#define FRF_CMD_RPMSG_MGR 0x01
+
+#endif // __COMMAND_CONFIG_H

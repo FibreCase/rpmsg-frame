@@ -7,6 +7,7 @@ find_package(Threads REQUIRED)
 add_library(rframe
     tty_driver.c
     rframe.c
+    daemon.c
 )
 
 target_include_directories(rframe 

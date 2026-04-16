@@ -287,6 +287,35 @@ int pts_take_rx_data(pts_session_t *session, uint8_t **data, size_t *len)
     return 0;
 }
 
+int pts_send_tx_data(pts_session_t *session, const uint8_t *data, size_t len)
+{
+    if (session == NULL || data == NULL || len == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    pthread_mutex_lock(&session->lock);
+    int master_fd = session->master_fd;
+    pthread_mutex_unlock(&session->lock);
+
+    if (master_fd < 0) {
+        errno = EBADF;
+        return -1;
+    }
+
+    ssize_t written = write(master_fd, data, len);
+    if (written < 0) {
+        return -1;
+    }
+
+    if ((size_t)written != len) {
+        errno = EIO;
+        return -1;
+    }
+
+    return 0;
+}
+
 void pts_release(pts_session_t *session)
 {
     if (session == NULL) {
@@ -320,6 +349,8 @@ void pts_release(pts_session_t *session)
     free(session);
 }
 
+
+/** Main Program Used */
 static int open_bridge_device(const char *path) {
     int fd = open(path, O_RDWR | O_NOCTTY);
     if (fd < 0) {

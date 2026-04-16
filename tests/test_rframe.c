@@ -11,18 +11,29 @@
 static tty_driver_t *drv;
 static pts_session_t *session;
 static const char *device_path;
+static rframe_payload_t last_payload;
+static int payload_received;
+
+static void on_rframe_payload(rframe_payload_t payload, void *user_ctx)
+{
+    (void)user_ctx;
+    last_payload = payload;
+    payload_received = 1;
+}
 
 void setUp(void)
 {
     drv = NULL;
     session = NULL;
     device_path = NULL;
+    payload_received = 0;
+    memset(&last_payload, 0, sizeof(last_payload));
 
     TEST_ASSERT_EQUAL(0, pts_init(&session, &device_path, NULL));
     TEST_ASSERT_NOT_NULL(session);
     TEST_ASSERT_NOT_NULL(device_path);
 
-    drv = rframe_init((char *)device_path);
+    drv = rframe_init((char *)device_path, on_rframe_payload, NULL);
     TEST_ASSERT_NOT_NULL(drv);
 }
 
@@ -35,6 +46,11 @@ void tearDown(void)
 
     pts_release(session);
     session = NULL;
+}
+
+void test_rframe_receive_payload_matches_pts_tx(void)
+{
+    // TODO: Implement this test to verify that data sent from pts_tx is correctly received by rframe_receive_payload
 }
 
 void test_rframe_send_payload_matches_pts_rx(void)

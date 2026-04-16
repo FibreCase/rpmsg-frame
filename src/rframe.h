@@ -12,10 +12,13 @@ typedef struct {
     uint8_t data[256];
 } rframe_payload_t;
 
-tty_driver_t *rframe_init(char *device_path);
+typedef void (*rframe_rx_payload_handler_t)(rframe_payload_t payload, void *user_ctx);
+
+tty_driver_t *rframe_init(char *device_path,
+                          rframe_rx_payload_handler_t rx_payload_handler,
+                          void *user_ctx);
 uint8_t rframe_close(tty_driver_t *drv);
 
 uint8_t rframe_send_payload(tty_driver_t *drv, rframe_payload_t *payload_p);
-void on_rpmsg_rx(const uint8_t *data, size_t len, tty_rx_reason_t reason, void *user_ctx);
 
 #endif  // __RPMSG_H
