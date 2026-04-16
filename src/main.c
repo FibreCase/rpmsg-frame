@@ -6,7 +6,7 @@
 
 int main() {
     tty_driver_t* drv;
-    if (!(drv = rframe_init("/dev/pts/8"))) {
+    if (!(drv = rframe_init("/dev/pts/7"))) {
         fprintf(stderr, "Failed to initialize rframe\n");
         return -1;
     }
