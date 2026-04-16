@@ -5,6 +5,8 @@
 - rframe/tty_driver：对串口设备进行帧发送和异步接收
 - pts：创建虚拟串口（PTY），可用于 loopback 或桥接到外部设备（如 RPMSG TTY）
 
+当前 `frf` 可作为 Unix socket 守护进程运行，把其他进程发来的请求转换为 RPMSG 帧发送。
+
 项目同时集成了 CTest 与 Unity，便于持续回归验证。
 
 ## 1. 当前构建产物
@@ -71,13 +73,34 @@ cmake --build build -j
 
 ### 3.3 运行 frf
 
-当前 main.c 内默认写死设备路径为 /dev/pts/7，因此通常需要先启动 frf_pts 并确认路径一致。
+`frf` 现在会启动一个 Unix socket 守护进程，默认监听 `/tmp/frf.sock`，并把收到的请求发送到指定串口设备。
 
 ```bash
-./build/frf
+./build/frf /dev/pts/7 /tmp/frf.sock
 ```
 
-运行后会发送一帧示例数据并等待按键退出。
+如果省略参数，则默认使用 `/dev/pts/7` 和 `/tmp/frf.sock`。
+
+#### 请求格式
+
+客户端使用 `SOCK_SEQPACKET` 连接 socket，每个请求发送一帧：
+
+- `cmd`：2 字节，网络字节序
+- `data_length`：1 字节
+- `data`：`data_length` 字节
+
+服务端返回 5 字节响应：
+
+- `status`：1 字节，`0` 表示发送成功
+- `errno`：4 字节，网络字节序，`status != 0` 时表示失败原因
+
+示例请求：
+
+```text
+cmd = 0x0102
+data_length = 4
+data = DE AD BE EF
+```
 
 ## 4. 测试（CTest + Unity）
 

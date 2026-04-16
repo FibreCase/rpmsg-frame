@@ -30,18 +30,19 @@ static void rpmsg_rx_fsm(uint8_t byte) {
 
     switch (state) {
         case WAIT_HEADER:
-            header = (header << 8) | byte;
+            header |= ((uint16_t)byte) << (8 * field_bytes);
             field_bytes++;
             if (field_bytes == 2 && header == 0xAA55) {
                 state       = WAIT_CMD;
                 cmd         = 0;
                 field_bytes = 0;
             } else if (field_bytes == 2) {
+                header = byte;
                 field_bytes = 1;
             }
             break;
         case WAIT_CMD:
-            cmd = (cmd << 8) | byte;
+            cmd |= ((uint16_t)byte) << (8 * field_bytes);
             field_bytes++;
             if (field_bytes == 2) {
                 state       = WAIT_LENGTH;
@@ -157,11 +158,23 @@ uint8_t rframe_send_payload(tty_driver_t *drv, rframe_payload_t *payload_p) {
         return 1;
     }
 
-    payload_p->header    = 0xAA55;
+    payload_p->header = 0xAA55;
+
     uint16_t payload_len = sizeof(payload_p->header) + sizeof(payload_p->cmd) +
                            sizeof(payload_p->data_length) + payload_p->data_length;
+    uint8_t frame[2 + 2 + 1 + 256] = {0};
+    size_t offset = 0;
 
-    if (tty_driver_send(drv, payload_p, payload_len) < 0) {
+    frame[offset++] = (uint8_t)(payload_p->header & 0xFF);
+    frame[offset++] = (uint8_t)((payload_p->header >> 8) & 0xFF);
+    frame[offset++] = (uint8_t)(payload_p->cmd & 0xFF);
+    frame[offset++] = (uint8_t)((payload_p->cmd >> 8) & 0xFF);
+    frame[offset++] = payload_p->data_length;
+    if (payload_p->data_length > 0) {
+        memcpy(frame + offset, payload_p->data, payload_p->data_length);
+    }
+
+    if (tty_driver_send(drv, frame, payload_len) < 0) {
         perror("tty_driver_send");
         return 1;
     }

@@ -50,7 +50,36 @@ void tearDown(void)
 
 void test_rframe_receive_payload_matches_pts_tx(void)
 {
-    // TODO: Implement this test to verify that data sent from pts_tx is correctly received by rframe_receive_payload
+    // Create test data
+    uint16_t cmd = 0x0304;
+    uint8_t data[] = {0xCA, 0xFE, 0xBA, 0xBE};
+    uint8_t data_length = sizeof(data);
+
+    // Construct little-endian frame bytes: [header_lo, header_hi, cmd_lo, cmd_hi, len, data...]
+    uint8_t frame[] = {
+        0x55, 0xAA,
+        cmd & 0xFF, (cmd >> 8) & 0xFF,
+        data_length,
+        0xCA, 0xFE, 0xBA, 0xBE
+    };
+    size_t frame_len = sizeof(frame);
+
+    // Reset payload state for this test
+    payload_received = 0;
+    memset(&last_payload, 0, sizeof(last_payload));
+
+    // Send the frame via PTS (simulating reception from the device)
+    TEST_ASSERT_EQUAL(0, pts_send_tx_data(session, frame, frame_len));
+
+    // Wait for the callback to be invoked
+    usleep(100000);
+
+    // Verify payload was received through the callback
+    TEST_ASSERT_EQUAL_INT(1, payload_received);
+    TEST_ASSERT_EQUAL_UINT16(0xAA55, last_payload.header);
+    TEST_ASSERT_EQUAL_UINT16(cmd, last_payload.cmd);
+    TEST_ASSERT_EQUAL_UINT8(data_length, last_payload.data_length);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(data, last_payload.data, data_length);
 }
 
 void test_rframe_send_payload_matches_pts_rx(void)
@@ -75,15 +104,17 @@ void test_rframe_send_payload_matches_pts_rx(void)
                           sizeof(payload.data_length) + payload.data_length;
     TEST_ASSERT_EQUAL(expected_len, rx_len);
 
-    uint8_t expected[2 + 2 + 1 + 4] = {0};
-    size_t offset = 0;
-    memcpy(expected + offset, &expected_header, sizeof(expected_header));
-    offset += sizeof(expected_header);
-    memcpy(expected + offset, &payload.cmd, sizeof(payload.cmd));
-    offset += sizeof(payload.cmd);
-    expected[offset] = payload.data_length;
-    offset += sizeof(payload.data_length);
-    memcpy(expected + offset, payload.data, payload.data_length);
+    uint8_t expected[] = {
+        (uint8_t)(expected_header & 0xFF),
+        (uint8_t)((expected_header >> 8) & 0xFF),
+        (uint8_t)(payload.cmd & 0xFF),
+        (uint8_t)((payload.cmd >> 8) & 0xFF),
+        payload.data_length,
+        0xDE,
+        0xAD,
+        0xBE,
+        0xEF,
+    };
 
     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, rx_data, rx_len);
     free(rx_data);
@@ -92,6 +123,7 @@ void test_rframe_send_payload_matches_pts_rx(void)
 // not needed when using generate_test_runner.rb
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_rframe_receive_payload_matches_pts_tx);
     RUN_TEST(test_rframe_send_payload_matches_pts_rx);
     return UNITY_END();
 }
