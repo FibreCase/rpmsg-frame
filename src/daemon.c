@@ -64,6 +64,16 @@ static void daemon_rx_sink(rframe_payload_t payload, void *user_ctx)
 {
 	(void)payload;
 	(void)user_ctx;
+
+	char log_msg[256];
+	char hex_data[256] = {0};
+	for (unsigned int i = 0; i < payload.data_length && i < 50; i++) {
+		snprintf(hex_data + i * 3, sizeof(hex_data) - i * 3, "%02X ", payload.data[i]);
+	}
+	snprintf(log_msg, sizeof(log_msg), "[RPMSG] Received payload: cmd=0x%04X, data_length=%u, data=[%s]",
+			 payload.cmd, payload.data_length, hex_data);
+	log_msg[sizeof(log_msg) - 1] = '\0';
+	fprintf(stderr, "%s\n", log_msg);
 }
 
 static int set_cloexec(int fd)

@@ -4,7 +4,7 @@
     {
       "label": "rk3506: build and run (qemu)",
       "type": "shell",
-      "command": "rm -rf build-arm && cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF && cmake --build build-arm -j && QEMU_LD_PREFIX=/usr/arm-linux-gnueabihf ./build-arm/frf",
+      "command": "rm -rf build-arm && cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/rk3506-arm-linux-gnueabihf.cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF && cmake --build build-arm -j",
       "group": {
         "kind": "build",
         "isDefault": true

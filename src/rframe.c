@@ -91,7 +91,7 @@ static void rpmsg_rx_handler(int length, const uint8_t *data) {
 
 static void on_rpmsg_rx(const uint8_t *data, size_t len, tty_rx_reason_t reason, void *user_ctx) {
     (void)user_ctx;
-    printf("RX callback: len=%zu, reason=%s\n", len,
+    printf("[RPMSG] RX callback: len=%zu, reason=%s\n", len,
            reason == TTY_RX_REASON_IDLE ? "IDLE" : "BUFFER_FULL");
 
     rpmsg_rx_handler(len, data);
